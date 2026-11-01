@@ -1,17 +1,31 @@
 const { spawnSync, spawn } = require('node:child_process');
 
-const required = ['MYSQL_HOST', 'MYSQL_DATABASE', 'MYSQL_USER', 'MYSQL_PASSWORD'];
-for (const key of required) {
-  if (!process.env[key]) {
-    console.error(`Missing required Render database setting: ${key}`);
-    process.exit(1);
+if (!process.env.DATABASE_URL) {
+  const required = ['MYSQL_HOST', 'MYSQL_DATABASE', 'MYSQL_USER', 'MYSQL_PASSWORD'];
+  for (const key of required) {
+    if (!process.env[key]) {
+      console.error(`Missing required database setting: ${key}`);
+      process.exit(1);
+    }
   }
+
+  const user = encodeURIComponent(process.env.MYSQL_USER);
+  const password = encodeURIComponent(process.env.MYSQL_PASSWORD);
+  const database = encodeURIComponent(process.env.MYSQL_DATABASE);
+  const port = process.env.MYSQL_PORT || '3306';
+  process.env.DATABASE_URL = `mysql://${user}:${password}@${process.env.MYSQL_HOST}:${port}/${database}`;
 }
 
-const user = encodeURIComponent(process.env.MYSQL_USER);
-const password = encodeURIComponent(process.env.MYSQL_PASSWORD);
-const database = encodeURIComponent(process.env.MYSQL_DATABASE);
-process.env.DATABASE_URL = `mysql://${user}:${password}@${process.env.MYSQL_HOST}:3306/${database}`;
+try {
+  const databaseUrl = new URL(process.env.DATABASE_URL);
+  if (databaseUrl.protocol !== 'mysql:') throw new Error();
+  if (process.env.NODE_ENV === 'production' && databaseUrl.hostname.endsWith('.tidbcloud.com') && databaseUrl.searchParams.get('sslaccept') !== 'strict') {
+    throw new Error('TiDB Cloud connections must use sslaccept=strict.');
+  }
+} catch (error) {
+  console.error(error instanceof Error && error.message ? error.message : 'DATABASE_URL must be a valid MySQL connection URL.');
+  process.exit(1);
+}
 
 async function waitForDatabase() {
   const { PrismaClient } = require('@prisma/client');

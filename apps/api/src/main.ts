@@ -21,8 +21,8 @@ async function bootstrap() {
     if (process.env.REQUIRE_CONTACT_VERIFICATION !== 'true') throw new Error('Production requires REQUIRE_CONTACT_VERIFICATION=true');
     if (process.env.AUTH_CHALLENGE_TEST_MODE === 'true') throw new Error('AUTH_CHALLENGE_TEST_MODE cannot be enabled in production');
     if (!process.env.RESEND_API_KEY || !process.env.AUTH_EMAIL_FROM) throw new Error('Production email verification requires RESEND_API_KEY and AUTH_EMAIL_FROM');
-    if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN || !process.env.TWILIO_FROM_NUMBER) throw new Error('Production phone verification requires Twilio credentials');
-    if (!process.env.S3_ENDPOINT || !process.env.S3_BUCKET || !process.env.S3_ACCESS_KEY_ID || !process.env.S3_SECRET_ACCESS_KEY || !process.env.S3_PUBLIC_BASE_URL?.startsWith('https://')) throw new Error('Production product images require HTTPS S3-compatible storage configuration');
+    if (process.env.SMS_AUTH_ENABLED !== 'false' && (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN || !process.env.TWILIO_FROM_NUMBER)) throw new Error('Production phone verification requires Twilio credentials unless SMS_AUTH_ENABLED=false');
+    if (process.env.PRODUCT_UPLOADS_ENABLED !== 'false' && (!process.env.S3_ENDPOINT || !process.env.S3_BUCKET || !process.env.S3_ACCESS_KEY_ID || !process.env.S3_SECRET_ACCESS_KEY || !process.env.S3_PUBLIC_BASE_URL?.startsWith('https://'))) throw new Error('Production product images require HTTPS S3-compatible storage configuration unless PRODUCT_UPLOADS_ENABLED=false');
   }
   const trustProxyHops = Number(process.env.TRUST_PROXY_HOPS ?? 0);
   if (!Number.isInteger(trustProxyHops) || trustProxyHops < 0 || trustProxyHops > 5) throw new Error('TRUST_PROXY_HOPS must be an integer from 0 to 5');

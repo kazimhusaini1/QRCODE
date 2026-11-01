@@ -1,32 +1,16 @@
 services:
-  - type: pserv
-    name: mahalla-marketplace-mysql
-    runtime: docker
-    plan: 1c-2g
-    region: singapore
-    dockerfilePath: ./apps/api/Dockerfile.mysql
-    dockerContext: .
-    disk:
-      name: mysql-data
-      mountPath: /var/lib/mysql
-      sizeGB: 20
-    envVars:
-      - fromGroup: mahalla-mysql-credentials
-      - key: MYSQL_ROOT_PASSWORD
-        generateValue: true
-
   - type: keyvalue
     name: mahalla-marketplace-redis
-    plan: 256mb
+    plan: free
     region: singapore
     maxmemoryPolicy: noeviction
-    persistenceMode: journal-snapshot
+    persistenceMode: off
     ipAllowList: []
 
   - type: web
     name: mahalla-marketplace-api
     runtime: docker
-    plan: 1c-2g
+    plan: free
     region: singapore
     dockerfilePath: ./apps/api/Dockerfile
     dockerContext: .
@@ -42,12 +26,8 @@ services:
         value: "1"
       - key: JWT_ACCESS_SECRET
         generateValue: true
-      - key: MYSQL_HOST
-        fromService:
-          type: pserv
-          name: mahalla-marketplace-mysql
-          property: host
-      - fromGroup: mahalla-mysql-credentials
+      - key: DATABASE_URL
+        sync: false
       - key: REDIS_URL
         fromService:
           type: keyvalue
@@ -61,6 +41,10 @@ services:
         value: "true"
       - key: AUTH_CHALLENGE_TEST_MODE
         value: "false"
+      - key: SMS_AUTH_ENABLED
+        value: "false"
+      - key: PRODUCT_UPLOADS_ENABLED
+        value: "false"
       - key: ENABLE_API_DOCS
         value: "false"
       - key: REFERRAL_REWARD_PAISA
@@ -73,29 +57,11 @@ services:
         sync: false
       - key: AUTH_EMAIL_FROM
         sync: false
-      - key: TWILIO_ACCOUNT_SID
-        sync: false
-      - key: TWILIO_AUTH_TOKEN
-        sync: false
-      - key: TWILIO_FROM_NUMBER
-        sync: false
-      - key: S3_ENDPOINT
-        sync: false
-      - key: S3_BUCKET
-        sync: false
-      - key: S3_REGION
-        value: auto
-      - key: S3_ACCESS_KEY_ID
-        sync: false
-      - key: S3_SECRET_ACCESS_KEY
-        sync: false
-      - key: S3_PUBLIC_BASE_URL
-        sync: false
 
   - type: web
     name: mahalla-marketplace-web
     runtime: docker
-    plan: 1c-2g
+    plan: free
     region: singapore
     dockerfilePath: ./apps/web/Dockerfile
     dockerContext: .
@@ -107,16 +73,6 @@ services:
       - key: NEXT_PUBLIC_API_URL
         value: https://mahalla-marketplace-api.onrender.com/api/v1
       - key: API_INTERNAL_URL
-        value: http://mahalla-marketplace-api:10000/api/v1
+        value: https://mahalla-marketplace-api.onrender.com/api/v1
       - key: NEXT_PUBLIC_SITE_URL
         value: https://mahalla-marketplace-web.onrender.com
-
-envVarGroups:
-  - name: mahalla-mysql-credentials
-    envVars:
-      - key: MYSQL_DATABASE
-        value: mahalla
-      - key: MYSQL_USER
-        value: mahalla_app
-      - key: MYSQL_PASSWORD
-        generateValue: true

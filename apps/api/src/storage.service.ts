@@ -6,6 +6,7 @@ const mimeExtensions: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png
 @Injectable()
 export class StorageService {
   createProductUpload(merchantId: string, contentType: string, sizeBytes: number) {
+    if (process.env.PRODUCT_UPLOADS_ENABLED === 'false') throw new ServiceUnavailableException('Product image uploads are disabled on this free demo');
     const extension = mimeExtensions[contentType];
     if (!extension) throw new BadRequestException('Only JPEG, PNG and WebP product images are supported');
     if (!Number.isInteger(sizeBytes) || sizeBytes < 1 || sizeBytes > 8 * 1024 * 1024) throw new BadRequestException('Product images must be 8 MB or smaller');
@@ -50,6 +51,7 @@ export class StorageService {
   }
 
   async verifyProductUpload(merchantId: string, publicUrl: string) {
+    if (process.env.PRODUCT_UPLOADS_ENABLED === 'false') throw new ServiceUnavailableException('Product image uploads are disabled on this free demo');
     const publicBase = process.env.S3_PUBLIC_BASE_URL;
     const endpointValue = process.env.S3_ENDPOINT;
     const bucket = process.env.S3_BUCKET;

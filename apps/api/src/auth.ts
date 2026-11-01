@@ -15,6 +15,7 @@ export class AuthService {
 
   async register(input: { name: string; phone?: string; email?: string; password: string; referralCode?: string }) {
     if (!input.phone && !input.email) throw new BadRequestException('A phone number or email is required');
+    if (process.env.REQUIRE_CONTACT_VERIFICATION === 'true' && process.env.SMS_AUTH_ENABLED === 'false' && !input.email) throw new BadRequestException('Use an email address to register on this demo');
     const passwordHash = await this.hashPassword(input.password);
     try {
       const referralCode = randomBytes(10).toString('hex').toUpperCase();
@@ -45,8 +46,12 @@ export class AuthService {
     return this.issueToken({ id: user.id, role: user.role });
   }
 
-  async requestVerification(identity: string) { return this.createChallenge(identity, 'VERIFY_CONTACT'); }
-  async requestPasswordReset(identity: string) { return this.createChallenge(identity, 'PASSWORD_RESET'); }
+  async requestVerification(identity: string) { this.requireSupportedIdentity(identity); return this.createChallenge(identity, 'VERIFY_CONTACT'); }
+  async requestPasswordReset(identity: string) { this.requireSupportedIdentity(identity); return this.createChallenge(identity, 'PASSWORD_RESET'); }
+
+  private requireSupportedIdentity(identity: string) {
+    if (process.env.REQUIRE_CONTACT_VERIFICATION === 'true' && process.env.SMS_AUTH_ENABLED === 'false' && !identity.includes('@')) throw new BadRequestException('Use your email address for verification on this demo');
+  }
 
   async verifyContact(identity: string, code: string) {
     const { user, challenge } = await this.claimChallenge(identity, code, 'VERIFY_CONTACT');
