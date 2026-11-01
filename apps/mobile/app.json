@@ -1,0 +1,40 @@
+{
+  "expo": {
+    "name": "Mahalla",
+    "slug": "mahalla-marketplace",
+    "scheme": "mahalla",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "plugins": [
+      "expo-router",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "kotlinVersion": "1.9.25",
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "pk.mahalla.marketplace"
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "ca15c72c-a9f6-4af5-baea-84fadcd9f88c"
+      }
+    },
+    "owner": "kazim12"
+  }
+}

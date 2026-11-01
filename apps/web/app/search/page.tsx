@@ -1,0 +1,14 @@
+import Link from 'next/link';
+import { apiGet, currentSociety, MerchantSummary, rupees } from '../lib/marketplace';
+
+export const dynamic = 'force-dynamic';
+
+export default async function SearchPage({ searchParams }: { searchParams: { q?: string; category?: string; open?: string; sort?: string } }) {
+  const society = await currentSociety();
+  const q = searchParams.q?.trim() ?? '';
+  const params = new URLSearchParams({ society: society?.slug ?? 'park-view-city-lahore', ...(q ? { q } : {}), ...(searchParams.category ? { category: searchParams.category } : {}) });
+  let merchants = await apiGet<MerchantSummary[]>(`merchants?${params}`) ?? [];
+  if (searchParams.open === '1') merchants = merchants.filter(m => m.isOpen);
+  if (searchParams.sort === 'delivery') merchants = merchants.sort((a,b)=>(a.estimatedDeliveryMinutes??999)-(b.estimatedDeliveryMinutes??999));
+  return <main className="content-page"><Link href="/" className="back-link">← ParkView Eats</Link><div className="eyebrow muted">FIND YOUR LOCAL</div><h1 className="page-title">{q?<>A little something for <em>“{q}”.</em></>:<>What are you <em>looking for?</em></>}</h1><form action="/search" className="search listing-search"><span>⌕</span><input name="q" defaultValue={q} autoFocus placeholder="Search restaurants, dishes, cuisines…"/><button>Search <span>→</span></button></form><form action="/search" className="food-filters"><input type="hidden" name="q" value={q}/><label>Cuisine<select name="category" defaultValue={searchParams.category??''}><option value="">All cuisines</option><option value="restaurants">Restaurants</option><option value="groceries">Groceries</option><option value="bakeries">Bakery</option></select></label><label>Sort<select name="sort" defaultValue={searchParams.sort??''}><option value="">Recommended</option><option value="delivery">Fastest delivery</option></select></label><label className="filter-check"><input type="checkbox" name="open" value="1" defaultChecked={searchParams.open==='1'}/> Open now</label><button>Apply filters</button></form>{merchants.length?<div className="merchant-grid">{merchants.map(m=><article className="merchant-card" key={m.id}><Link href={`/merchants/${m.slug}?society=${society?.slug}`}><div className="merchant-cover" style={m.coverUrl?{backgroundImage:`url(${m.coverUrl})`}:{}}><span>{m.category.name}</span><b>{m.isOpen?'OPEN NOW':'CLOSED'}</b></div><div className="merchant-info"><div><h3>{m.name}</h3><p>{m.description}</p></div><small>{m.estimatedDeliveryMinutes??30}–40 min · Free delivery</small></div></Link>{m.products?.slice(0,4).map(p=><div className="compact-product" key={p.id}>{p.name}<b>{rupees(p.pricePaisa)}</b></div>)}</article>)}</div>:<div className="empty-state"><div className="empty-icon">⌕</div><h3>No nearby matches yet.</h3><p>Try another search term or browse all local businesses.</p><Link href="/merchants" className="text-link">Explore businesses ↗</Link></div>}</main>;
+}

@@ -1,0 +1,19 @@
+{
+  "name": "mahalla-marketplace",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@9.15.4",
+  "scripts": {
+    "dev": "pnpm --parallel --filter @mahalla/api --filter @mahalla/web dev",
+    "dev:api": "pnpm --filter @mahalla/api dev",
+    "dev:web": "pnpm --filter @mahalla/web dev",
+    "dev:mobile": "pnpm --filter @mahalla/mobile start",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "test": "pnpm --filter @mahalla/api test",
+    "e2e": "pnpm --filter @mahalla/api e2e",
+    "db:migrate": "pnpm --filter @mahalla/api prisma migrate dev",
+    "db:seed": "pnpm --filter @mahalla/api prisma db seed"
+  },
+  "devDependencies": { "turbo": "^2.3.3", "typescript": "^5.7.2" }
+}

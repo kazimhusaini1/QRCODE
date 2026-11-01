@@ -1,0 +1,65 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: mahalla
+          MYSQL_USER: mahalla
+          MYSQL_PASSWORD: mahalla
+        ports: [3306:3306]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+      redis:
+        image: redis:7-alpine
+        ports: [6379:6379]
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: mysql://mahalla:mahalla@127.0.0.1:3306/mahalla
+      REDIS_URL: redis://127.0.0.1:6379
+      JWT_ACCESS_SECRET: ci-only-secret-for-automated-verification-at-least-32-chars
+      REFERRAL_REWARD_PAISA: 20000
+      REQUIRE_CONTACT_VERIFICATION: true
+      AUTH_CHALLENGE_TEST_MODE: true
+      NEXT_PUBLIC_API_URL: http://127.0.0.1:4000/api/v1
+      EXPO_PUBLIC_API_URL: http://127.0.0.1:4000/api/v1
+      CI: true
+      EXPO_NO_TELEMETRY: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @mahalla/api exec prisma generate --schema prisma/schema.prisma
+      - run: pnpm --filter @mahalla/api exec prisma migrate deploy --schema prisma/schema.prisma
+      - run: pnpm --filter @mahalla/api db:seed
+      - run: pnpm lint
+      - run: pnpm test
+      - run: pnpm --filter @mahalla/api build
+      - name: Start API for commerce journey
+        run: pnpm --filter @mahalla/api start > /tmp/mahalla-api.log 2>&1 &
+      - name: Wait for API
+        run: node -e "async function main(){for(let i=0;i<45;i++){try{const r=await fetch('http://127.0.0.1:4000/api/v1/health');if(r.ok)return;}catch{}await new Promise(r=>setTimeout(r,1000));}console.error(require('fs').readFileSync('/tmp/mahalla-api.log','utf8'));process.exit(1)}main()"
+      - run: pnpm e2e
+      - run: pnpm build

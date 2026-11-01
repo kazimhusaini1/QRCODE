@@ -1,0 +1,122 @@
+services:
+  - type: pserv
+    name: mahalla-marketplace-mysql
+    runtime: docker
+    plan: 1c-2g
+    region: singapore
+    dockerfilePath: ./apps/api/Dockerfile.mysql
+    dockerContext: .
+    disk:
+      name: mysql-data
+      mountPath: /var/lib/mysql
+      sizeGB: 20
+    envVars:
+      - fromGroup: mahalla-mysql-credentials
+      - key: MYSQL_ROOT_PASSWORD
+        generateValue: true
+
+  - type: keyvalue
+    name: mahalla-marketplace-redis
+    plan: 256mb
+    region: singapore
+    maxmemoryPolicy: noeviction
+    persistenceMode: journal-snapshot
+    ipAllowList: []
+
+  - type: web
+    name: mahalla-marketplace-api
+    runtime: docker
+    plan: 1c-2g
+    region: singapore
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: .
+    dockerCommand: node apps/api/scripts/render-entrypoint.cjs
+    healthCheckPath: /api/v1/health
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: API_PORT
+        value: "10000"
+      - key: TRUST_PROXY_HOPS
+        value: "1"
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: MYSQL_HOST
+        fromService:
+          type: pserv
+          name: mahalla-marketplace-mysql
+          property: host
+      - fromGroup: mahalla-mysql-credentials
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: mahalla-marketplace-redis
+          property: connectionString
+      - key: WEB_ORIGIN
+        value: https://mahalla-marketplace-web.onrender.com
+      - key: PUBLIC_SITE_URL
+        value: https://mahalla-marketplace-web.onrender.com
+      - key: REQUIRE_CONTACT_VERIFICATION
+        value: "true"
+      - key: AUTH_CHALLENGE_TEST_MODE
+        value: "false"
+      - key: ENABLE_API_DOCS
+        value: "false"
+      - key: REFERRAL_REWARD_PAISA
+        value: "10000"
+      - key: HIGH_VALUE_ORDER_PAISA
+        value: "1000000"
+      - key: AUDIT_RETENTION_DAYS
+        value: "365"
+      - key: RESEND_API_KEY
+        sync: false
+      - key: AUTH_EMAIL_FROM
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_FROM_NUMBER
+        sync: false
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_REGION
+        value: auto
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_PUBLIC_BASE_URL
+        sync: false
+
+  - type: web
+    name: mahalla-marketplace-web
+    runtime: docker
+    plan: 1c-2g
+    region: singapore
+    dockerfilePath: ./apps/web/Dockerfile
+    dockerContext: .
+    healthCheckPath: /
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_API_URL
+        value: https://mahalla-marketplace-api.onrender.com/api/v1
+      - key: API_INTERNAL_URL
+        value: http://mahalla-marketplace-api:10000/api/v1
+      - key: NEXT_PUBLIC_SITE_URL
+        value: https://mahalla-marketplace-web.onrender.com
+
+envVarGroups:
+  - name: mahalla-mysql-credentials
+    envVars:
+      - key: MYSQL_DATABASE
+        value: mahalla
+      - key: MYSQL_USER
+        value: mahalla_app
+      - key: MYSQL_PASSWORD
+        generateValue: true
