@@ -18,14 +18,16 @@ if (!process.env.DATABASE_URL) {
 
 try {
   const databaseUrl = new URL(process.env.DATABASE_URL);
-  if (databaseUrl.protocol !== 'mysql:') throw new Error();
+  if (!['mysql:', 'postgres:', 'postgresql:'].includes(databaseUrl.protocol)) throw new Error();
   if (process.env.NODE_ENV === 'production' && databaseUrl.hostname.endsWith('.tidbcloud.com') && databaseUrl.searchParams.get('sslaccept') !== 'strict') {
     throw new Error('TiDB Cloud connections must use sslaccept=strict.');
   }
 } catch (error) {
-  console.error(error instanceof Error && error.message ? error.message : 'DATABASE_URL must be a valid MySQL connection URL.');
+  console.error(error instanceof Error && error.message ? error.message : 'DATABASE_URL must be a valid MySQL or PostgreSQL connection URL.');
   process.exit(1);
 }
+
+const schemaPath = process.env.PRISMA_SCHEMA || 'prisma/schema.prisma';
 
 async function waitForDatabase() {
   const { PrismaClient } = require('@prisma/client');
@@ -37,7 +39,7 @@ async function waitForDatabase() {
       return;
     } catch {
       await prisma.$disconnect().catch(() => undefined);
-      if (attempt === 60) throw new Error('MySQL did not become ready within 120 seconds.');
+      if (attempt === 60) throw new Error('The database did not become ready within 120 seconds.');
       await new Promise(resolve => setTimeout(resolve, 2000));
     }
   }
@@ -47,12 +49,13 @@ async function main() {
   await waitForDatabase();
   const migration = spawnSync(process.execPath, [
     'node_modules/prisma/build/index.js', 'migrate', 'deploy',
-    '--schema', 'prisma/schema.prisma',
+    '--schema', schemaPath,
   ], { cwd: '/workspace/apps/api', stdio: 'inherit', env: process.env });
   if (migration.status !== 0) process.exit(migration.status ?? 1);
 
   const seed = spawnSync(process.execPath, [
-    'node_modules/prisma/build/index.js', 'db', 'seed', '--schema', 'prisma/schema.prisma',
+    'node_modules/prisma/build/index.js', 'db', 'seed',
+    '--schema', schemaPath,
   ], { cwd: '/workspace/apps/api', stdio: 'inherit', env: process.env });
   if (seed.status !== 0) process.exit(seed.status ?? 1);
 

@@ -1,0 +1,495 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CUSTOMER
+  MERCHANT_ADMIN
+  STAFF
+  SUPER_ADMIN
+}
+
+enum MerchantStatus {
+  PENDING
+  APPROVED
+  SUSPENDED
+  REJECTED
+}
+
+enum OrderStatus {
+  PENDING
+  ACCEPTED
+  PREPARING
+  READY_FOR_PICKUP
+  OUT_FOR_DELIVERY
+  COMPLETED
+  CANCELLED
+  REJECTED
+}
+
+enum FulfillmentType {
+  DELIVERY
+  PICKUP
+}
+
+enum PaymentMethod {
+  CASH_ON_DELIVERY
+  CASH_ON_PICKUP
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  REFUNDED
+}
+
+enum CouponDiscountType {
+  FIXED_PAISE
+  PERCENT_BPS
+}
+
+enum ReferralStatus {
+  PENDING
+  QUALIFIED
+  REWARDED
+}
+
+enum AuthChallengePurpose {
+  VERIFY_CONTACT
+  PASSWORD_RESET
+}
+
+enum AuthChallengeChannel {
+  EMAIL
+  SMS
+}
+
+enum SupportTicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum MerchantStaffRole {
+  MANAGER
+  ORDERS
+  CATALOG
+  INVENTORY
+}
+
+model User {
+  id              String    @id @default(cuid())
+  phone           String?   @unique
+  email           String?   @unique
+  emailVerifiedAt DateTime?
+  phoneVerifiedAt DateTime?
+  passwordHash    String?
+  referralCode    String      @unique
+  name            String
+  role            UserRole  @default(CUSTOMER)
+  emailOrderNotifications Boolean @default(true)
+  smsOrderNotifications   Boolean @default(true)
+  activeSocietyId String?
+  activeSociety   Society?  @relation("ActiveSociety", fields: [activeSocietyId], references: [id], onDelete: SetNull)
+  merchantProfile Merchant?
+  merchantStaffAccess MerchantStaffAccess[]
+  sessions        Session[]
+  addresses       Address[]
+  orders          Order[]
+  reviews         Review[]
+  couponRedemptions CouponRedemption[]
+  referralsSent   Referral[]  @relation("ReferralSender")
+  referralReceived Referral?  @relation("ReferralRecipient")
+  auditEvents     AuditEvent[]
+  authChallenges  AuthChallenge[]
+  favorites       Favorite[]
+  supportTickets  SupportTicket[]
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([role])
+}
+
+model Session {
+  id               String    @id @default(cuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokenHash String    @unique
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+
+  @@index([userId, revokedAt, expiresAt])
+}
+
+model RateLimitBucket {
+  bucketKey String   @id @db.VarChar(64)
+  hits      Int      @default(0)
+  expiresAt DateTime
+  updatedAt DateTime @updatedAt
+
+  @@index([expiresAt])
+}
+
+model AuditEvent {
+  id        String   @id @default(cuid())
+  actorId   String?
+  actor     User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  method    String   @db.VarChar(10)
+  path      String   @db.VarChar(255)
+  status    Int
+  details   Json?
+  createdAt DateTime @default(now())
+
+  @@index([actorId, createdAt])
+  @@index([createdAt])
+}
+
+model AuthChallenge {
+  id             String               @id @default(cuid())
+  userId         String
+  user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  purpose        AuthChallengePurpose
+  channel        AuthChallengeChannel
+  recipient      String               @db.VarChar(320)
+  codeHash       String               @db.VarChar(64)
+  attempts       Int                  @default(0)
+  expiresAt      DateTime
+  consumedAt     DateTime?
+  createdAt      DateTime             @default(now())
+
+  @@index([userId, purpose, createdAt])
+  @@index([expiresAt, consumedAt])
+}
+
+model Favorite {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  merchantId String
+  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, merchantId])
+  @@index([merchantId, createdAt])
+}
+
+model Society {
+  id        String            @id @default(cuid())
+  name      String
+  slug      String            @unique
+  city      String
+  province  String
+  isActive  Boolean           @default(true)
+  users     User[]            @relation("ActiveSociety")
+  merchants MerchantSociety[]
+  couponSocieties CouponSociety[]
+  orders    Order[]
+  createdAt DateTime          @default(now())
+}
+
+model Category {
+  id        String     @id @default(cuid())
+  name      String
+  slug      String     @unique
+  icon      String?
+  isActive  Boolean    @default(true)
+  merchants Merchant[]
+  products  Product[]
+  sortOrder Int        @default(0)
+}
+
+model Merchant {
+  id                       String            @id @default(cuid())
+  ownerId                  String            @unique
+  owner                    User              @relation(fields: [ownerId], references: [id])
+  categoryId               String
+  category                 Category          @relation(fields: [categoryId], references: [id])
+  name                     String
+  slug                     String            @unique
+  description              String            @db.Text
+  phone                    String
+  logoUrl                  String?
+  coverUrl                 String?
+  status                   MerchantStatus    @default(PENDING)
+  isOpen                   Boolean           @default(false)
+  acceptsDelivery          Boolean           @default(true)
+  acceptsPickup            Boolean           @default(true)
+  minimumOrderPaisa        Int               @default(0)
+  deliveryFeePaisa         Int               @default(0)
+  estimatedDeliveryMinutes Int?
+  operatingHours          Json?
+  societyAreas             MerchantSociety[]
+  products                 Product[]
+  orders                   Order[]
+  coupons                  Coupon[]
+  reviews                  Review[]
+  favorites                Favorite[]
+  staffAccess              MerchantStaffAccess[]
+  createdAt                DateTime          @default(now())
+  updatedAt                DateTime          @updatedAt
+
+  @@index([status, isOpen])
+  @@index([categoryId])
+}
+
+model MerchantStaffAccess {
+  id         String           @id @default(cuid())
+  merchantId String
+  merchant   Merchant         @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  userId     String           @unique
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  previousRole UserRole
+  role       MerchantStaffRole
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  @@unique([merchantId, userId])
+  @@index([role])
+}
+
+model MerchantSociety {
+  merchantId String
+  societyId  String
+  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  society    Society  @relation(fields: [societyId], references: [id], onDelete: Cascade)
+  enabled    Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  @@id([merchantId, societyId])
+  @@index([societyId, enabled])
+}
+
+model Product {
+  id          String     @id @default(cuid())
+  merchantId  String
+  merchant    Merchant   @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  categoryId  String?
+  category    Category?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  name        String
+  description String     @db.Text
+  imageUrl    String?
+  pricePaisa  Int
+  isAvailable Boolean    @default(true)
+  inventory   Inventory?
+  inventoryMovements InventoryMovement[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([merchantId, isAvailable])
+}
+
+model InventoryMovement {
+  id          String   @id @default(cuid())
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  actorId     String?
+  quantityDelta Int
+  reason      String   @db.VarChar(40)
+  referenceId String?  @db.VarChar(64)
+  createdAt   DateTime @default(now())
+
+  @@index([productId, createdAt])
+  @@index([reason, createdAt])
+}
+
+model Inventory {
+  productId String   @id
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity  Int      @default(0)
+  updatedAt DateTime @updatedAt
+}
+
+model Address {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  societyId     String
+  label         String
+  recipientName String
+  phone         String
+  line1         String
+  line2         String?
+  instructions  String?  @db.Text
+  latitude      Decimal? @db.Decimal(10, 7)
+  longitude     Decimal? @db.Decimal(10, 7)
+  isDefault     Boolean  @default(false)
+  orders        Order[]
+  createdAt     DateTime @default(now())
+
+  @@index([userId, isDefault])
+}
+
+model Order {
+  id                   String             @id @default(cuid())
+  number               String             @unique
+  customerId           String
+  customer             User               @relation(fields: [customerId], references: [id])
+  merchantId           String
+  merchant             Merchant           @relation(fields: [merchantId], references: [id])
+  societyId            String
+  society              Society            @relation(fields: [societyId], references: [id])
+  addressId            String?
+  address              Address?           @relation(fields: [addressId], references: [id], onDelete: SetNull)
+  addressSnapshot      Json
+  merchantNameSnapshot String
+  status               OrderStatus        @default(PENDING)
+  fulfillment          FulfillmentType
+  paymentMethod        PaymentMethod
+  paymentStatus        PaymentStatus      @default(PENDING)
+  idempotencyKey       String?            @unique
+  subtotalPaisa        Int
+  discountPaisa        Int                @default(0)
+  deliveryFeePaisa     Int                @default(0)
+  totalPaisa           Int
+  couponId             String?
+  couponCodeSnapshot   String?
+  coupon               Coupon?            @relation(fields: [couponId], references: [id], onDelete: SetNull)
+  instructions         String?            @db.Text
+  items                OrderItem[]
+  statusEvents         OrderStatusEvent[]
+  review               Review?
+  couponRedemption     CouponRedemption?
+  supportTickets      SupportTicket[]
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  @@index([customerId, createdAt])
+  @@index([merchantId, status, createdAt])
+  @@index([societyId, createdAt])
+}
+
+model SupportTicket {
+  id          String             @id @default(cuid())
+  customerId  String
+  customer    User               @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  orderId     String?
+  order       Order?             @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  subject     String             @db.VarChar(160)
+  message     String             @db.Text
+  response    String?            @db.Text
+  status      SupportTicketStatus @default(OPEN)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@index([customerId, createdAt])
+  @@index([status, createdAt])
+}
+
+model Coupon {
+  id                    String              @id @default(cuid())
+  code                  String              @unique
+  discountType          CouponDiscountType
+  value                 Int
+  maxDiscountPaisa      Int?
+  minimumSubtotalPaisa  Int                 @default(0)
+  startsAt              DateTime            @default(now())
+  endsAt                DateTime?
+  usageLimit            Int?
+  usageCount            Int                 @default(0)
+  perUserLimit          Int                 @default(1)
+  isActive              Boolean             @default(true)
+  merchantId            String?
+  merchant              Merchant?           @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  societies             CouponSociety[]
+  orders                Order[]
+  redemptions           CouponRedemption[]
+  referralReward        Referral?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  @@index([isActive, startsAt, endsAt])
+  @@index([merchantId])
+}
+
+model CouponSociety {
+  couponId  String
+  societyId String
+  coupon    Coupon  @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  society   Society @relation(fields: [societyId], references: [id], onDelete: Cascade)
+
+  @@id([couponId, societyId])
+  @@index([societyId])
+}
+
+model CouponRedemption {
+  id                String   @id @default(cuid())
+  couponId          String
+  coupon            Coupon   @relation(fields: [couponId], references: [id], onDelete: Restrict)
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  orderId           String   @unique
+  order             Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  discountPaisa     Int
+  createdAt         DateTime @default(now())
+
+  @@index([couponId, userId])
+}
+
+model Review {
+  id         String   @id @default(cuid())
+  orderId    String   @unique
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  merchantId String
+  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  rating     Int
+  comment    String?  @db.VarChar(2000)
+  isPublished Boolean @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([merchantId, isPublished, createdAt])
+}
+
+model Referral {
+  id              String         @id @default(cuid())
+  referrerId      String
+  referrer        User           @relation("ReferralSender", fields: [referrerId], references: [id], onDelete: Cascade)
+  referredUserId  String         @unique
+  referredUser    User           @relation("ReferralRecipient", fields: [referredUserId], references: [id], onDelete: Cascade)
+  codeSnapshot    String
+  status          ReferralStatus @default(PENDING)
+  rewardCouponId  String?        @unique
+  rewardCoupon    Coupon?        @relation(fields: [rewardCouponId], references: [id], onDelete: SetNull)
+  qualifiedAt     DateTime?
+  rewardedAt      DateTime?
+  createdAt       DateTime       @default(now())
+
+  @@index([referrerId, createdAt])
+  @@index([status, createdAt])
+}
+
+model OrderItem {
+  id                   String  @id @default(cuid())
+  orderId              String
+  order                Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId            String?
+  productNameSnapshot  String
+  merchantNameSnapshot String
+  unitPricePaisa       Int
+  quantity             Int
+  discountPaisa        Int     @default(0)
+  lineTotalPaisa       Int
+
+  @@index([orderId])
+}
+
+model OrderStatusEvent {
+  id        String      @id @default(cuid())
+  orderId   String
+  order     Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status    OrderStatus
+  note      String?
+  actorId   String?
+  createdAt DateTime    @default(now())
+
+  @@index([orderId, createdAt])
+}

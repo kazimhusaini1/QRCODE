@@ -12,7 +12,7 @@ services:
     runtime: docker
     plan: free
     region: singapore
-    dockerfilePath: ./apps/api/Dockerfile
+    dockerfilePath: ./apps/api/Dockerfile.postgres
     dockerContext: .
     dockerCommand: node apps/api/scripts/render-entrypoint.cjs
     healthCheckPath: /api/v1/health
@@ -20,14 +20,20 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: DEMO_MODE
+        value: "true"
       - key: API_PORT
         value: "10000"
       - key: TRUST_PROXY_HOPS
         value: "1"
       - key: JWT_ACCESS_SECRET
         generateValue: true
+      - key: PRISMA_SCHEMA
+        value: prisma/postgres/schema.prisma
       - key: DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: mahalla-marketplace-db
+          property: connectionString
       - key: REDIS_URL
         fromService:
           type: keyvalue
@@ -38,7 +44,7 @@ services:
       - key: PUBLIC_SITE_URL
         value: https://mahalla-marketplace-web.onrender.com
       - key: REQUIRE_CONTACT_VERIFICATION
-        value: "true"
+        value: "false"
       - key: AUTH_CHALLENGE_TEST_MODE
         value: "false"
       - key: SMS_AUTH_ENABLED
@@ -53,10 +59,6 @@ services:
         value: "1000000"
       - key: AUDIT_RETENTION_DAYS
         value: "365"
-      - key: RESEND_API_KEY
-        sync: false
-      - key: AUTH_EMAIL_FROM
-        sync: false
 
   - type: web
     name: mahalla-marketplace-web
@@ -76,3 +78,11 @@ services:
         value: https://mahalla-marketplace-api.onrender.com/api/v1
       - key: NEXT_PUBLIC_SITE_URL
         value: https://mahalla-marketplace-web.onrender.com
+
+databases:
+  - name: mahalla-marketplace-db
+    plan: free
+    region: singapore
+    databaseName: mahalla
+    user: mahalla
+    postgresMajorVersion: "18"

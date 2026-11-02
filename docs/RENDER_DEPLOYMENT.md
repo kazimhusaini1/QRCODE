@@ -1,21 +1,18 @@
 # Render free demo deployment
 
-The root `render.yaml` defines the web app, API, and Redis as Render Free services. MySQL runs on the external free TiDB Cloud Starter tier. This is for a demo/staging environment, not production: free Render services can sleep, share a limited monthly instance-hour allowance, and may be restarted. Free Redis is volatile, so queued jobs and rate-limit counters can be cleared after a restart.
+The root `render.yaml` provisions the web app, API, Render Postgres, and Render Key Value on free plans. It needs no provider credentials or accounts outside Render. The API uses a separate Postgres Prisma schema for this demo; local development and CI can continue using the existing MySQL schema.
 
-## Free-tier demo choices
+## Demo limitations
 
-- **Render:** free Docker web services for the Next.js web app and NestJS API, plus free Key Value for Redis.
-- **TiDB Cloud Starter:** choose MySQL-compatible mode. Use its Prisma connection URL with `sslaccept=strict` as `DATABASE_URL`; the API startup runs the Prisma migrations and seed. The included free quota is limited and connections are throttled/denied if it is exhausted.
-- **Resend:** email verification and password recovery use Resend. Verify a sender domain and enter `RESEND_API_KEY` and `AUTH_EMAIL_FROM` in Render.
-- **SMS:** disabled for this free demo (`SMS_AUTH_ENABLED=false`). Users must register and verify with email. Enable it and configure Twilio before using this as a real customer service.
-- **Product uploads:** disabled for this free demo (`PRODUCT_UPLOADS_ENABLED=false`). Configure S3-compatible storage such as Cloudflare R2 and enable uploads before merchant use.
+- Render Free web services sleep after inactivity, share a limited monthly instance-hour allowance, and have no persistent local filesystem.
+- Render Free Postgres is limited to 1 GB, has no backups, and expires 30 days after creation.
+- Render Free Key Value is volatile, so queued jobs and rate-limit counters can be lost on restart.
+- `DEMO_MODE=true` disables the production contact-verification requirement. New accounts receive a login token immediately. Do not use this setup for real customer data or orders.
+- SMS and product image uploads are disabled. Payment remains COD/cash on pickup.
 
 ## Deploy
 
-1. In Render, create a Blueprint from this GitHub repository and select the root `render.yaml` on branch `main`.
-2. Enter `DATABASE_URL`, `RESEND_API_KEY`, and `AUTH_EMAIL_FROM` in Render. Never commit provider credentials or share them in chat.
-3. For TiDB, use the connection details from the TiDB Connect dialog and ensure the URL looks like `mysql://USER:PASSWORD@HOST:4000/DATABASE?sslaccept=strict`.
-4. Confirm the Render service URLs match the origins in `render.yaml`. If Render assigns different service names, update API and web URLs, sync the Blueprint, and redeploy.
-5. Check `/api/v1/health`, email verification, email password recovery, and COD checkout with demo data.
-
-The free profile keeps `NODE_ENV=production`, contact verification enabled, and authentication test mode disabled. The only implemented payment method remains COD/cash on pickup. Do not use the free demo with real customer accounts or orders; move to persistent paid infrastructure and enable SMS and image storage before launch.
+1. In Render, create a Blueprint from this GitHub repository on branch `main`, using the root `render.yaml`.
+2. Review the Blueprint; all four resources are set to the Free plan. Deploy without adding provider secrets.
+3. Wait for the PostgreSQL migration and seed, then verify `/api/v1/health` and the web page.
+4. The admin account is not created automatically. For a real launch, replace this demo setup with persistent production storage, verified account delivery, image storage, and an initial admin bootstrap.
